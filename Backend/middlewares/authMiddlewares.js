@@ -1,11 +1,10 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const User = require('./models/User');
 
 // protected middleware
 const protect = async (req, res, next) => {
     let token;
 
-    
     if(req.headers.authorization && req.headers.authorization.toLowerCase().startsWith('bearer')) {
         token = req.headers.authorization.split(' ')[1];
     }

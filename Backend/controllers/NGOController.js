@@ -73,7 +73,7 @@ const getNGOById = async (req, res) => {
   }
 };
 
-// prootected routes
+// protected routes
 
 const createNGO = async (req, res) => {
   try {

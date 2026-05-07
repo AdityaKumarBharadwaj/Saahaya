@@ -1,42 +1,53 @@
-// Step 1: Import mongoose
 const mongoose = require('mongoose');
+const crypto = require('crypto');
 
-// Step 2: Define donation schema
+const counterSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  seq: {
+    type: Number,
+    default: 0
+  }
+});
+
+
+const Counter = mongoose.model('Counter', counterSchema);
+
+
+// Donation Schema
 const donationSchema = new mongoose.Schema(
   {
-    // Who donated
     donor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
       required: true
     },
 
-    // Which NGO
     ngo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'NGO',
       required: true
     },
 
-    // Amount
     amount: {
       type: Number,
       required: [true, 'Please provide donation amount'],
       min: [10, 'Minimum donation amount is ₹10']
     },
 
-    // Currency
     currency: {
       type: String,
       default: 'INR'
     },
 
-    // Payment Details
     paymentDetails: {
-      orderId: String,           // Razorpay order ID
-      paymentId: String,         // Razorpay payment ID
-      signature: String,         // Razorpay signature (for verification)
-      method: String,            // UPI, Card, NetBanking, etc.
+      orderId: String,
+      paymentId: String,
+      signature: String,
+      method: String,
       status: {
         type: String,
         enum: ['pending', 'success', 'failed'],
@@ -44,10 +55,12 @@ const donationSchema = new mongoose.Schema(
       }
     },
 
-    // Tax Receipt
     taxReceipt: {
-      receiptNumber: String,     // Unique receipt number
-      receiptUrl: String,        // PDF download link
+      receiptNumber: {
+        type: String,
+        sparse: true  // For unique index
+      },
+      receiptUrl: String,
       section80G: {
         type: Boolean,
         default: true
@@ -55,13 +68,11 @@ const donationSchema = new mongoose.Schema(
       generatedAt: Date
     },
 
-    // Anonymous Donation
     isAnonymous: {
       type: Boolean,
       default: false
     },
 
-    // Optional Message
     message: {
       type: String,
       maxlength: [500, 'Message cannot exceed 500 characters']
@@ -73,31 +84,70 @@ const donationSchema = new mongoose.Schema(
 );
 
 
-//Generate unique receipt number before saving
+
+// index
+donationSchema.index({ donor: 1, createdAt: -1 });  // For donor's donation history
+donationSchema.index({ ngo: 1, createdAt: -1 });    // For NGO's received donations
+donationSchema.index({ createdAt: 1 });              // For date range queries
+donationSchema.index({ 'taxReceipt.receiptNumber': 1 }, { unique: true, sparse: true });  // Unique receipts
+
+// PRE-SAVE HOOK (Fixed all issues)
 donationSchema.pre('save', async function(next) {
-  // Only generate if payment successful and no receipt yet
   if (this.paymentDetails.status === 'success' && !this.taxReceipt.receiptNumber) {
-    // Generate receipt number: REC-YYYYMMDD-XXXXX
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const maxRetries = 3;
+    let retryCount = 0;
     
-    // Get count of donations today for unique number
-    const count = await this.constructor.countDocuments({
-      createdAt: {
-        $gte: new Date(date.setHours(0, 0, 0, 0)),
-        $lt: new Date(date.setHours(23, 59, 59, 999))
+    while (retryCount < maxRetries) {
+      try {
+        // Use UTC to avoid timezone issues
+        const now = new Date();
+        const year = now.getUTCFullYear();
+        const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(now.getUTCDate()).padStart(2, '0');
+        const dateStr = `${year}${month}${day}`;
+        
+        // Atomic counter (no race condition)
+        const counterName = `receipt-${dateStr}`;
+        const counter = await Counter.findOneAndUpdate(
+          { name: counterName },
+          { $inc: { seq: 1 } },
+          { 
+            new: true, 
+            upsert: true,
+            setDefaultsOnInsert: true 
+          }
+        );
+        
+        this.taxReceipt.receiptNumber = `REC-${dateStr}-${String(counter.seq).padStart(5, '0')}`;
+        this.taxReceipt.generatedAt = Date.now();
+        
+        break;  // Success
+        
+      } catch (error) {
+        retryCount++;
+        
+        if (retryCount >= maxRetries) {
+          // Fallback to UUID if all retries fail
+          const now = new Date();
+          const year = now.getUTCFullYear();
+          const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(now.getUTCDate()).padStart(2, '0');
+          const dateStr = `${year}${month}${day}`;
+          const uniqueId = crypto.randomBytes(4).toString('hex').toUpperCase();
+          
+          this.taxReceipt.receiptNumber = `REC-${dateStr}-${uniqueId}`;
+          this.taxReceipt.generatedAt = Date.now();
+          break;
+        }
+        
+        // Exponential backoff before retry
+        await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
       }
-    });
-    
-    this.taxReceipt.receiptNumber = `REC-${year}${month}${day}-${String(count + 1).padStart(5, '0')}`;
-    this.taxReceipt.generatedAt = Date.now();
+    }
   }
   
   next();
 });
-
 
 const Donation = mongoose.model('Donation', donationSchema);
 

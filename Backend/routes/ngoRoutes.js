@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const { getAllNGOs, getNGOById, createNGO, updateNGO, getMyNGO, approveNGO, rejectNGO, getPendingNGOs } = require('../controllers/ngoController');
-const { protect, authorize } = require('../middlewares/authMiddlewares');
+const { protect, authorize } = require('../middlewares/authMiddleware');
 
 //public routes
 // GET /api/ngos?cause=education&city=Mumbai&search=akanksha

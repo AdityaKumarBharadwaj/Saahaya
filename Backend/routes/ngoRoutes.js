@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { getAllNGOs, getNGOById, createNGO, updateNGO, getMyNGO, approveNGO, rejectNGO, getPendingNGOs } = require('../controllers/NGOController');
+const { getAllNGOs, getNGOById, createNGO, updateNGO, getMyNGO, approveNGO, rejectNGO, getPendingNGOs } = require('../controllers/ngoController');
 const { protect, authorize } = require('../middlewares/authMiddlewares');
 
 //public routes

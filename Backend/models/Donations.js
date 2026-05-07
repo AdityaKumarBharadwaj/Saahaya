@@ -16,8 +16,6 @@ const counterSchema = new mongoose.Schema({
 
 const Counter = mongoose.model('Counter', counterSchema);
 
-
-// Donation Schema
 const donationSchema = new mongoose.Schema(
   {
     donor: {

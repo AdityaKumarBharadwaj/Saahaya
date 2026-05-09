@@ -1,4 +1,19 @@
 const mongoose = require('mongoose');
+const crypto = require('crypto');
+
+const counterSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  seq: {
+    type: Number,
+    default: 0
+  }
+});
+
+const Counter = mongoose.model('Counter', counterSchema);
 
 const donationSchema = new mongoose.Schema(
   {
@@ -25,12 +40,11 @@ const donationSchema = new mongoose.Schema(
       default: 'INR'
     },
 
-  
     paymentDetails: {
-      orderId: String,           // Razorpay order ID
-      paymentId: String,         // Razorpay payment ID
-      signature: String,         // Razorpay signature (for verification)
-      method: String,            // UPI, Card, NetBanking, etc.
+      orderId: String,
+      paymentId: String,
+      signature: String,
+      method: String,
       status: {
         type: String,
         enum: ['pending', 'success', 'failed'],
@@ -39,8 +53,11 @@ const donationSchema = new mongoose.Schema(
     },
 
     taxReceipt: {
-      receiptNumber: String,    
-      receiptUrl: String,        
+      receiptNumber: {
+        type: String,
+        sparse: true 
+      },
+      receiptUrl: String,
       section80G: {
         type: Boolean,
         default: true
@@ -53,7 +70,6 @@ const donationSchema = new mongoose.Schema(
       default: false
     },
 
-    // Optional Message
     message: {
       type: String,
       maxlength: [500, 'Message cannot exceed 500 characters']
@@ -64,23 +80,64 @@ const donationSchema = new mongoose.Schema(
   }
 );
 
+// INDEXES
+donationSchema.index({ donor: 1, createdAt: -1 }); 
+donationSchema.index({ ngo: 1, createdAt: -1 }); 
+donationSchema.index({ createdAt: 1 });     
+donationSchema.index({ 'taxReceipt.receiptNumber': 1 }, { unique: true, sparse: true });
+
+// PRE-SAVE HOOK (Fixed all issues)
 donationSchema.pre('save', async function(next) {
-  
   if (this.paymentDetails.status === 'success' && !this.taxReceipt.receiptNumber) {
-    const date = new Date();
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const maxRetries = 3;
+    let retryCount = 0;
     
-    const count = await this.constructor.countDocuments({
-      createdAt: {
-        $gte: new Date(date.setHours(0, 0, 0, 0)),
-        $lt: new Date(date.setHours(23, 59, 59, 999))
+    while (retryCount < maxRetries) {
+      try {
+        
+        const now = new Date();
+        const year = now.getUTCFullYear();
+        const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(now.getUTCDate()).padStart(2, '0');
+        const dateStr = `${year}${month}${day}`;
+        
+        const counterName = `receipt-${dateStr}`;
+        const counter = await Counter.findOneAndUpdate(
+          { name: counterName },
+          { $inc: { seq: 1 } },
+          { 
+            new: true, 
+            upsert: true,
+            setDefaultsOnInsert: true 
+          }
+        );
+        
+        this.taxReceipt.receiptNumber = `REC-${dateStr}-${String(counter.seq).padStart(5, '0')}`;
+        this.taxReceipt.generatedAt = Date.now();
+        
+        break;  // Success
+        
+      } catch (error) {
+        retryCount++;
+        
+        if (retryCount >= maxRetries) {
+          // Fallback to UUID if all retries fail
+          const now = new Date();
+          const year = now.getUTCFullYear();
+          const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+          const day = String(now.getUTCDate()).padStart(2, '0');
+          const dateStr = `${year}${month}${day}`;
+          const uniqueId = crypto.randomBytes(4).toString('hex').toUpperCase();
+          
+          this.taxReceipt.receiptNumber = `REC-${dateStr}-${uniqueId}`;
+          this.taxReceipt.generatedAt = Date.now();
+          break;
+        }
+        
+        // Exponential backoff before retry
+        await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
       }
-    });
-    
-    this.taxReceipt.receiptNumber = `REC-${year}${month}${day}-${String(count + 1).padStart(5, '0')}`;
-    this.taxReceipt.generatedAt = Date.now();
+    }
   }
   
   next();

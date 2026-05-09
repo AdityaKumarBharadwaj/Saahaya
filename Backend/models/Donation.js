@@ -81,12 +81,11 @@ const donationSchema = new mongoose.Schema(
 );
 
 // INDEXES
-donationSchema.index({ donor: 1, createdAt: -1 }); 
-donationSchema.index({ ngo: 1, createdAt: -1 }); 
-donationSchema.index({ createdAt: 1 });     
-donationSchema.index({ 'taxReceipt.receiptNumber': 1 }, { unique: true, sparse: true });
+donationSchema.index({ donor: 1, createdAt: -1 });  // For donor's donation history
+donationSchema.index({ ngo: 1, createdAt: -1 });    // For NGO's received donations
+donationSchema.index({ createdAt: 1 });              // For date range queries
+donationSchema.index({ 'taxReceipt.receiptNumber': 1 }, { unique: true, sparse: true });  // Unique receipts
 
-// PRE-SAVE HOOK (Fixed all issues)
 donationSchema.pre('save', async function(next) {
   if (this.paymentDetails.status === 'success' && !this.taxReceipt.receiptNumber) {
     const maxRetries = 3;
@@ -94,7 +93,6 @@ donationSchema.pre('save', async function(next) {
     
     while (retryCount < maxRetries) {
       try {
-        
         const now = new Date();
         const year = now.getUTCFullYear();
         const month = String(now.getUTCMonth() + 1).padStart(2, '0');
@@ -121,7 +119,6 @@ donationSchema.pre('save', async function(next) {
         retryCount++;
         
         if (retryCount >= maxRetries) {
-          // Fallback to UUID if all retries fail
           const now = new Date();
           const year = now.getUTCFullYear();
           const month = String(now.getUTCMonth() + 1).padStart(2, '0');
@@ -134,7 +131,6 @@ donationSchema.pre('save', async function(next) {
           break;
         }
         
-        // Exponential backoff before retry
         await new Promise(resolve => setTimeout(resolve, 100 * retryCount));
       }
     }

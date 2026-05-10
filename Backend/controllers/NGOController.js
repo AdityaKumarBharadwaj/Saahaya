@@ -1,7 +1,6 @@
 const NGO = require("../models/NGO");
 const User = require("../models/User");
 
-
 // public routes
 const getAllNGOs = async (req, res) => {
   try {
@@ -313,6 +312,97 @@ const getPendingNGOs = async (req, res) => {
   }
 };
 
+
+const uploadDocuments = async (req, res) => {
+  try {
+    const ngo = await NGO.findById(req.params.id);
+    if (!ngo) {
+      return res.status(404).json({
+        success: false,
+        message: 'NGO not found'
+      });
+    }
+
+    if (ngo.user.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to upload documents for this NGO'
+      });
+    }
+    if (req.files) {
+      if (req.files.trustDeed) {
+        ngo.documents.trustDeed = req.files.trustDeed[0].path;
+      }
+      if (req.files.certificate80G) {
+        ngo.documents.certificate80G = req.files.certificate80G[0].path;
+      }
+      if (req.files.panCard) {
+        ngo.documents.panCard = req.files.panCard[0].path;
+      }
+    }
+    await ngo.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Documents uploaded successfully',
+      data: ngo
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Upload NGO logo
+// @route   PUT /api/ngos/:id/upload-logo
+// @access  Private (NGO owner)
+const uploadLogo = async (req, res) => {
+  try {
+    const ngo = await NGO.findById(req.params.id);
+
+    if (!ngo) {
+      return res.status(404).json({
+        success: false,
+        message: 'NGO not found'
+      });
+    }
+
+    if (ngo.user.toString() !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to upload logo for this NGO'
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload a logo'
+      });
+    }
+
+    ngo.logo = req.file.path;
+
+    await ngo.save();
+    res.status(200).json({
+      success: true,
+      message: 'Logo uploaded successfully',
+      data: ngo
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllNGOs,
   getNGOById,
@@ -321,5 +411,7 @@ module.exports = {
   getMyNGO,
   approveNGO,
   rejectNGO,
-  getPendingNGOs
+  getPendingNGOs,
+  uploadDocuments,
+  uploadLogo 
 };

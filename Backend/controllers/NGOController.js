@@ -25,12 +25,12 @@ const getAllNGOs = async (req, res) => {
     }
 
     const ngos = await NGO.find(query).populate('user', 'name email phone').select('-documents -bankDetails').sort({ rating: -1, donorCount: -1 });
-    if (!ngos) {
-      return res.status(404).json({
-        success: false,
-        message: "NGO not found",
-      });
-    }
+
+    res.status(200).json({
+      success: true,
+      count: ngos.length,
+      data: ngos
+    });
 
   } catch (error) {
     return res.status(500).json({

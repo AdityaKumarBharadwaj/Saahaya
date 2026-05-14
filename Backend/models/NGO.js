@@ -13,7 +13,20 @@ const ngoSchema = new mongoose.Schema(
             type: String,
             required: [true, 'please provide NGO name'],
             trim: true,
-            maxLength: [100, 'Name cannot exceed 100 chartaers'],
+            maxLength: [100, 'Name cannot exceed 100 characters'],
+        },
+
+        registrationNumber: {
+            type: String,
+            unique: true,
+            sparse: true,
+            trim: true
+        },
+
+        about: {
+            type: String,
+            maxLength: [2000, 'About section cannot exceed 2000 characters'],
+            trim: true
         },
 
         cause: {

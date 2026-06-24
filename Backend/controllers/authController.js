@@ -1,6 +1,10 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { sendWelcomeEmail } = require('../services/emailService');
 
+// @desc    Register a new user
+// @route   POST /api/auth/register
+// @access  Public
 const register = async (req, res) => {
     try {
         const { name, email, password, role, phone } = req.body;
@@ -18,7 +22,6 @@ const register = async (req, res) => {
             });
         }
 
-
         const user = await User.create({
             name,
             email,
@@ -28,6 +31,11 @@ const register = async (req, res) => {
         });
 
         const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRE });
+
+        // Send welcome email (non-blocking — don't fail registration if email fails)
+        sendWelcomeEmail(user).catch((err) =>
+            console.error('Welcome email failed:', err.message)
+        );
 
         res.status(201).json({
             success: true,
@@ -50,6 +58,9 @@ const register = async (req, res) => {
     }
 };
 
+// @desc    Login user
+// @route   POST /api/auth/login
+// @access  Public
 const login = async (req, res) => {
 
     try {
@@ -110,6 +121,9 @@ const login = async (req, res) => {
     }
 }
 
+// @desc    Get currently logged-in user
+// @route   GET /api/auth/me
+// @access  Private
 const getMe = async (req, res) => {
     try {
       // req.user is set by auth middleware

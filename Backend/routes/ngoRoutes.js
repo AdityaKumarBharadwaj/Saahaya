@@ -1,45 +1,60 @@
 const express = require('express');
 const router = express.Router();
 
-const { getAllNGOs, getNGOById, createNGO, updateNGO, getMyNGO, approveNGO, rejectNGO, getPendingNGOs, uploadDocuments, uploadLogo } = require('../controllers/ngoController');
-const { protect, authorize } = require('../middlewares/authMiddleware');
+const {
+  getAllNGOs,
+  getNGOById,
+  createNGO,
+  updateNGO,
+  getMyNGO,
+  approveNGO,
+  rejectNGO,
+  getPendingNGOs,
+  uploadDocuments,
+  uploadLogo
+} = require('../controllers/ngoController');
 
-//public routes
-// GET /api/ngos?cause=education&city=Mumbai&search=akanksha
+const { protect, authorize } = require('../middlewares/authMiddleware');
+const { uploadLogo: uploadLogoMiddleware, uploadDocuments: uploadDocumentsMiddleware } = require('../middlewares/cloudinaryUpload');
+
+// ── PUBLIC ROUTES ─────────────────────────────────────────────────────────────
+
+// GET /api/ngos?cause=education&city=Mumbai&search=akanksha&sort=rating
 router.get('/', getAllNGOs);
+
+// ── PRIVATE ROUTES (order matters — specific before :id) ──────────────────────
+
+// GET /api/ngos/me/profile  ← must be BEFORE /:id
+router.get('/me/profile', protect, authorize('ngo'), getMyNGO);
+
+// GET /api/ngos/admin/pending  ← must be BEFORE /:id
+router.get('/admin/pending', protect, authorize('admin'), getPendingNGOs);
 
 // GET /api/ngos/:id
 router.get('/:id', getNGOById);
 
-// private route
-// GET /api/ngos/me/profile
-router.get('/me/profile', protect, getMyNGO);
-
 // POST /api/ngos
 router.post('/', protect, authorize('ngo'), createNGO);
 
-//  PUT /api/ngos/:id
+// PUT /api/ngos/:id
 router.put('/:id', protect, updateNGO);
 
-// admin routes
+// ── ADMIN ROUTES ──────────────────────────────────────────────────────────────
 
-// Get pending NGOs for verification
-// GET /api/ngo/admin/pending
-router.get('/admin/pending', protect, authorize('admin'), getPendingNGOs);
-
-// Approve NGO
 // PUT /api/ngos/:id/approve
 router.put('/:id/approve', protect, authorize('admin'), approveNGO);
 
-// Reject NGO
-// PUT /api/ngo/:id/reject
+// PUT /api/ngos/:id/reject
 router.put('/:id/reject', protect, authorize('admin'), rejectNGO);
 
-// Upload documents (multiple files)
+// ── FILE UPLOAD ROUTES ────────────────────────────────────────────────────────
+
+// PUT /api/ngos/:id/upload-documents (multiple PDFs → Cloudinary)
 router.put(
   '/:id/upload-documents',
   protect,
-  upload.fields([
+  authorize('ngo', 'admin'),
+  uploadDocumentsMiddleware.fields([
     { name: 'trustDeed', maxCount: 1 },
     { name: 'certificate80G', maxCount: 1 },
     { name: 'panCard', maxCount: 1 }
@@ -47,13 +62,13 @@ router.put(
   uploadDocuments
 );
 
-// NEW: Upload logo (single file)
+// PUT /api/ngos/:id/upload-logo (single image → Cloudinary)
 router.put(
   '/:id/upload-logo',
   protect,
-  upload.single('logo'),
+  authorize('ngo', 'admin'),
+  uploadLogoMiddleware.single('logo'),
   uploadLogo
 );
-
 
 module.exports = router;

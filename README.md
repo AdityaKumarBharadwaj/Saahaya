@@ -31,11 +31,11 @@
 
 India has over **3.3 million NGOs** but most donors struggle to:
 
-- ✗ Verify if an NGO is genuine
-- ✗ Donate digitally with confidence
-- ✗ Receive instant tax receipts (80G)
-- ✗ Track how their money is being used
-- ✗ Discover NGOs by cause or location
+-  Verify if an NGO is genuine
+-  Donate digitally with confidence
+-  Receive instant tax receipts (80G)
+-  Track how their money is being used
+-  Discover NGOs by cause or location
 
 **Saahaya solves all of this** with a verified NGO ecosystem, secure Razorpay payments, automatic tax certificate generation, and transparent impact reporting — all in one platform.
 
